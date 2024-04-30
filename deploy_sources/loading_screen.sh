@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to display loading animation
+# loading animation
 function show_loading() {
     local chars="/-\|"
     local delay=0.1
@@ -17,8 +17,8 @@ function show_loading() {
 show_loading &
 loading_pid=$!
 
-# Sleep for 10 seconds
-sleep 25
+#
+sleep 10
 
 # Terminate the loading animation
 kill $loading_pid >/dev/null 2>&1

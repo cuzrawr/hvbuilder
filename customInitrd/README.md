@@ -54,21 +54,3 @@ find initrd/ -print0 | cpio --null --create --verbose --format=newc | gzip --bes
 find . | cpio -o -H newc  > ../initrd.new
 ```
 
-## Creating Filesystem Image
-
-Create a filesystem image using `mkfs.erofs`:
-```bash
-sudo mkfs.erofs --all-root --aufs debian2.erofs debian2/
-```
-
-## Network Configuration
-
-Configure network settings:
-```bash
-ip a add 192.168.249.2/24 dev ens3
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
-ip link set dev ens3 up
-ip route add default via 192.168.249.1
-apt install -y iperf3
-```
-

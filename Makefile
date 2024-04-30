@@ -8,8 +8,16 @@
 #       xz
 
 # Variables
+
+# TODO: figureout linuxcontainers project pipeline
+#       write scraper
+#        and get official builds from official mirrors (not directly jenkins)
+#         (maybe there util already exist)
+
 ROOTFS_URL := https://jenkins.linuxcontainers.org/job/image-debian/lastStableBuild/architecture=amd64,release=bookworm,variant=cloud/artifact/rootfs.tar.xz
+# debug url, run pythom -m http.server with rootfs.tar.xz in same dir
 #ROOTFS_URL := http://127.0.0.1:8000/rootfs.tar.xz
+#ROOTFS_URL ?=
 ROOTFS_TAR := rootfs.tar.xz
 RAW_TAR := 1.tar
 OUTPUT_QCOW2 := output.qcow2
@@ -25,15 +33,22 @@ DEBUG_MODE := 0
 # Conditionally include debug options
 ifeq ($(DEBUG_MODE),1)
 CUSTOMIZATION_ARGS := -v -x
+HYPERVISOR_ARGS := "console=hvc0"
 endif
 
 
-.PHONY: all clean runhypervisor createinitrd ultraclean
+# ifeq ($(ROOTFS_URL),)
+# $(ROOTFS_TAR):
+# 	@echo "ROOTFS_URL is not provided. Assuming $(ROOTFS_TAR) already exists locally."
+# else
+# $(ROOTFS_TAR):
+# 	curl -L -C - -f -o $(ROOTFS_TAR) $(ROOTFS_URL)
+# endif
+
+
+.PHONY: all clean build test initrd ultraclean runhv stophv
 
 all: clean initrd build test
-
-runhypervisor: runhv
-createinitrd: initrd
 
 build: $(OUTPUT_QCOW2) $(IMAGEEROFS)
 	@echo -e "\033[32m cloud-hypervisor image built \033[0m\033[33m successfull. \033[0m\033[32m \033[0m"
@@ -46,6 +61,13 @@ $(ROOTFS_TAR):
 $(RAW_TAR): $(ROOTFS_TAR)
 	xz -dv $(ROOTFS_TAR) && mv $(basename $(ROOTFS_TAR)) $(RAW_TAR)
 
+
+
+################### WARNING ADDING SIZE IS IMPORTANT
+################### IF THERE NO ENOUGH FREE SPACE IN output.qcow2 BUILD WILL CRASH
+#### TODO: MAKE size PREDICTION  OR SWITCH TO OTHER UTILS
+
+
 $(OUTPUT_QCOW2): $(RAW_TAR)
 	virt-make-fs --format=qcow2 --size=+100M $(RAW_TAR) $(OUTPUT_QCOW2)
 
@@ -53,9 +75,11 @@ $(OUTPUT_QCOW2): $(RAW_TAR)
 	virt-customize $(CUSTOMIZATION_ARGS) -a $(OUTPUT_QCOW2) \
 		--root-password password:123 \
 		--hostname "hostname" \
-		--firstboot-command 'ssh-keygen -A && systemctl restart sshd' \
+		--firstboot "deploy_sources/scripts/ntwrk.sh" \
+		--firstboot-command "ssh-keygen -A && systemctl restart sshd" \
 		--copy-in "deploy_sources/debs/busybox-static_1.35.0-4+b3_amd64.deb:/var/cache/apt/" \
-		--install "/var/cache/apt/busybox-static_1.35.0-4+b3_amd64.deb"
+		--install "/var/cache/apt/busybox-static_1.35.0-4+b3_amd64.deb" \
+		--firstboot-command "apt-get -y clean"
 
 $(IMAGEEROFS): $(OUTPUT_QCOW2)
 	rm -rf rootfs_building
@@ -80,35 +104,44 @@ test:
 	fi
 
 initrd:
-	@echo "Building initrd based on busybox..."
-	cd ./customInitrd && make all && cd -
-	@echo "DONE: try to run make again..."
+	@if [ ! -f "./customInitrd/initrd.cpio.gz" ]; then \
+		echo "Building initrd based on busybox..."; \
+		cd ./customInitrd && make all && cd -; \
+	else \
+		echo "initrd already exists."; \
+	fi
 
-
+#
+# using bogon TEST-NET2 ( check: deploy_sources/scripts/ntwrk.sh )
+#
 runhv:
 	@rm -f ./cloud-hypervisor-test.sock
 	@#(sleep 70s && killall -9 cloud-hypervisor && tset) &
-	@echo -e "\033[32mWelcome. Initializing RobCo. INDUSTRIES (tm) Termlink Version 5115.1235.11114.15...\033[0m"
-	@echo "VT100"
-	@echo -e "\033[32mTo commune with the API socket (best uttered in a separate console):\033[0m"
-	@echo -e "\033[33mch-remote --api-socket ./cloud-hypervisor-test.sock ping\033[0m\033[32m"
-	@echo -e "\033[33mch-remote --api-socket ./cloud-hypervisor-test.sock info\033[0m\033[32m"
-	@echo ""
-	@echo -e "\033[32mATTENTION: Prepare for terminal entry...\033[0m"
-	@echo ""
-	@echo -e "\033[31mUSERNAME:\033[0m\033[33m root\033[0m\033[31m PASSWORD:\033[0m\033[33m 123\033[0m\033[32m\033[0m"
-	@echo -e "Initialising Robco Industries(TM) MF Boot Agen v2.3.0..." && ./deploy_sources/loading_screen.sh &
-	@sleep 20s && $(HYPERVISOR) \
+	@echo " "
+	@echo -e "[ ] \033[32mHello. The hypervisor will commence autostart shortly.\033[0m"
+	@echo " "
+	@echo -e "[ ] \033[32mTo access  API  socket ( examples ):\033[0m"
+	@echo -e "[ ] \033[33mch-remote --api-socket ./cloud-hypervisor-test.sock ping\033[0m"
+	@echo -e "[ ] \033[33mch-remote --api-socket ./cloud-hypervisor-test.sock info\033[0m"
+	@echo " "
+	@echo -e "[ ] \033[32mATTENTION: Prepare for terminal entry...\033[0m"
+	@echo " "
+	@echo -e "[ ] default \033[33mUSER:\033[0m\033[31m root\033[0m with\033[33m PASSWORD:\033[0m\033[31m 123\033[0m"
+	@echo -en "[ ] " && ./deploy_sources/loading_screen.sh &
+	@sleep 10s && $(HYPERVISOR) \
 		--kernel $(KERNEL_IMAGE) \
 		--disk path=$(IMAGEEROFS) \
-		--cmdline "console=hvc0 root=/dev/vda1 rw" \
+		--cmdline " $(HYPERVISOR_ARGS) root=/dev/vda1 rw " \
 		--cpus boot=2 \
 		--memory size=1024M \
-		--net "tap=,mac=,ip=,mask=" \
+		--net "tap=,mac=,ip=198.51.100.1,mask=255.255.255.0" \
 		--api-socket ./cloud-hypervisor-test.sock \
-		--initramfs=$(INITRD_IMAGE)
+		--initramfs=$(INITRD_IMAGE) && reset
 
 #	timeout --foreground --kill-after=60 --signal=15 50s
+stophv:
+	-@pgrep -f "cloud-hypervisor" > /dev/null && killall -15 cloud-hypervisor > /dev/null 2>&1 || echo "cloud-hypervisor is not running"
+
 
 ultraclean:
 	@echo "Resetting project state"
