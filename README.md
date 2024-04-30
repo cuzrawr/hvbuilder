@@ -1,25 +1,31 @@
-# No root hypervisor initrd+rootfs+kernel builder
 
-## project description
+----
 
-The goal is to automate the creation of hypervisor images for my own needs without using root, currently supporting only Debian 12 & Cloud-hypervisor project (Can be easily extended in the future).
+### no root initrd+rootfs+kernel builder scripts
+Created for own needs. 
+Project status: working PoC
 
-The current Proof of Concept (PoC) produces a custom initrd. Initrd has badly:-) scripted overlayfs.
-That overlay combinintg tmpfs + rootfs, so you get temporary VM with initial state each time you reboot it.
-Instead of using tmpfs it can be adjusted to store persitent userdata. (that not implemented currently) 
+### Project description:
+The aim of this project is to automate the process of creating & customizing VM images **without root perms** for my personal needs. 
 
-Next, it produces, along with initrd, the Debian rootfs which is packed into erofs. 
-Currently utilizing LXC project rootfs Debian 12 bookworm.
-And for rootfs customization its utilising `virt-customize` utility.
+### Details:
 
-====
-*Project status: working PoC*
+Makefile produce `*.erofs` image at the end, ensuring they are deletion-proofed. 
+This means that even if a user accidentally runs `rm -rf` inside VM, everything will still be in read-only mode thanks to overlayfs. 
+In the worst-case scenario, the user may lose only the overlay files, but not the operating system.
+
+Currently, project supports only `debian 12 bookworm` and `cloud-hypervisor`, but easily extend this support in the future. 
+
+The rootfs packed into *,erofs along with the initrd. 
+Customizing of the rootfs done by `virt-customize` tool.
+
+Current Proof of Concept (PoC) creates a custom initrd with badly scripted overlayfs (*rewritethis :-) ).
+The `overlayfs` is mounted within the generated rootfs (**.erofs*) filesystem which is read-only by design and `tmpfs` ontop.
+While the PoC doesn't currently implement storing persistent user data, this feature can be added in the future.
 
 
-
-## Below are some usage instructions:
-
-### Requirements
+----
+### Below are some usage instructions
 Ensure the following dependencies are installed:
 - `virt-make-fs`
 - `virt-customize`
@@ -29,25 +35,19 @@ Ensure the following dependencies are installed:
 - `xz`
 
 ### Usage
-- Run `make` or `make all` to clean, initialize the image, build, and test.
+- Run `make` or `make all` to clean, download the clean rootfs, build, and test.
 - After building, run `make runhv` to run the image ( require `cloud-hypervisor` ).
-- Customize everything by editing the appropriate sections in the Makefile.
 - Use `make clean` to remove generated files.
 - Use `make ultraclean` to reset project to initial state
+- 
+- Customize everything by editing the appropriate sections in the Makefile.
 
-## Network Configuration
-
-Configure network settings:
-```bash
-ip a add 192.168.249.2/24 dev ens3
-echo "nameserver 1.1.1.1" > /etc/resolv.conf
-ip link set dev ens3 up
-ip route add default via 192.168.249.1
-apt install -y iperf3
-```
+----
 
 ### Note
 - Here notes that I fogot.
+
+----
 
 ### TODO
 
