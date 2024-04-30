@@ -1,4 +1,4 @@
-# Cloud-Hypervisor Image Builder
+# custom hypervisor initrd+rootfs+kernel builder
 
 ## project description
 
