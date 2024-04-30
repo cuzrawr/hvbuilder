@@ -1,0 +1,115 @@
+echo "building initrd"
+
+# guestfish --ro -i tar-out -a debian-10.img /etc - |
+#cd customInitrd
+
+# virt-builder debian-12 --format qcow2 --size 10G -o /var/kvm/images/debian-12.qcow2
+
+# guestfish --ro -i tar-out -a debian-10.img / - | mkfs.erofs --all-root --gzip --tar=- debian2.erofs
+
+
+#   --update \
+#  --install openssh-server,nginx \
+
+rm -rf 1.tar debian2.erofs output.qcow2 rootfs_building/
+
+#wget -c https://jenkins.linuxcontainers.org/job/image-debian/lastStableBuild/architecture=amd64,release=bookworm,variant=default/artifact/disk.qcow2
+
+
+# todo: write script to follow this images https://images.linuxcontainers.org/images/
+
+#wget -c https://jenkins.linuxcontainers.org/job/image-debian/lastStableBuild/architecture=amd64,release=bookworm,variant=cloud/artifact/rootfs.tar.xz
+
+/usr/bin/curl -L -C - -f -o rootfs.tar.xz https://jenkins.linuxcontainers.org/job/image-debian/lastStableBuild/architecture=amd64,release=bookworm,variant=cloud/artifact/rootfs.tar.xz
+
+
+#tar xpvf rootfs.tar.xz --xattrs-include='*.*' --numeric-owner
+
+# virt-edit -a disk.img /etc/passwd -e 's/^root:.*?:/root::/'
+ #virt-make-fs [--options] input.tar.gz output.img
+#virt-make-fs --format=qcow2 --size=+200M rootfs.tar.xz output.qcow2
+#echo "DO NOT USE QCOW2 ITS BUGGY"
+
+
+# test
+cp rootfs.tar.xz 1.tar.xz
+
+xz -dv 1.tar.xz
+#virt-make-fs --format=qcow2 --size=+1000M 1.tar output.qcow2
+
+
+
+
+################### WARNING ADDING SIZE IS IMPORTAND AND DEPENDS ON WHAT U WANNA DO NEXT
+################### IF THER NO ENOUGH SIZE IN output.qcow2 BUILD WILL CRASH
+
+
+
+virt-make-fs --format=qcow2 --size=+100M 1.tar output.qcow2
+
+# # build vm
+#--exclude=/proc/* --exclude=/tmp/* --exclude=/mnt/* --exclude=/dev/* --exclude=/sys/* --exclude=/run/* --exclude=/media/* --exclude=/var/log/*
+#     --no-network \
+
+
+virt-customize -v -x -a "output.qcow2" \
+        --root-password password:123 \
+        --hostname "ggggg" \
+        --firstboot-command 'ssh-keygen -A && systemctl restart sshd' 
+
+#        --run-command "tar -cvpzf backup.tar.gz --exclude=/backup.tar.gz --exclude=/proc/* --exclude=/tmp/* --exclude=/mnt/* --exclude=/dev/* --exclude=/sys/* --exclude=/run/* --exclude=/media/* --exclude=/var/log/* / >/dev/null || true "
+
+# echo "Customizing Debian image..."
+#virt-customize -v -x -a "output.qcow2" \
+        # --root-password password:123 \
+        # --hostname "debian12" \
+        # --no-network \
+        # --firstboot-command 'ssh-keygen -A && systemctl restart sshd' \
+        # --copy-in "rcluster-mgmtd_0.1~bookworm.deb:/var/cache/apt/" \
+        # --install "/var/cache/apt/rcluster-mgmtd_0.1~bookworm.deb" \
+        # --run-command "tar -cvpzf backup.tar.gz --exclude=/backup.tar.gz --exclude=/proc/* --exclude=/tmp/* --exclude=/mnt/* --exclude=/dev/* --exclude=/sys/* --exclude=/run/* --exclude=/media/* --exclude=/var/log/* / >/dev/null || true "
+
+echo "please wait this could take long "
+
+rm -rf rootfs_building
+mkdir -p rootfs_building
+guestfish --ro --format=qcow2 -m /dev/sda -a output.qcow2 -i copy-out / rootfs_building
+mkfs.erofs --all-root -T31536000 debian2.erofs rootfs_building
+
+
+# convert raw to erofs
+
+if [ -f "./debian2.erofs" ]; then
+    echo "debian2.erofs exist."
+else
+    echo "File debian-vm.qcow2 does not exist. You need to build it first with virt-builder"
+    exit 1
+fi
+
+
+#guestfish --ro -i tar-out -a debian-vm.qcow2 / - | mkfs.erofs --all-root --gzip --tar=- debian2.erofs
+
+#guestfish --ro -i tar-out -a debian-vm.qcow2 / - | gzip --best > homes.tar.gz
+#mkdir -p ./root_debootstrap/
+#guestmount --format=raw --ro -a debian-vm.qcow2 -i ./root_debootstrap/
+
+#debian-vm.erofs
+
+#guestunmount ./root_debootstrap/
+
+#rm debian-vm.qcow2
+
+
+# run virt manager for tests (warning u cant kill it from that console)
+if [ -f "./linux-cloud-hypervisor/arch/x86/boot/compressed/vmlinux.bin" ]; then
+    echo "vmlinux.bin exist."
+else
+    echo "File vmlinux.bin does not exist. You need to build it first or place to ./linux-cloud-hypervisor/arch/x86/boot/compressed/"
+    exit 1
+fi
+
+
+
+
+
+cloud-hypervisor --kernel ./linux-cloud-hypervisor/arch/x86/boot/compressed/vmlinux.bin --disk path=./debian2.erofs --cmdline "console=hvc0 root=/dev/vda1 rw" --cpus boot=2 --memory size=1024M --net "tap=,mac=,ip=,mask=" --initramfs=./customInitrd/initrd.cpio.gz

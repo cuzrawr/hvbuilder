@@ -1,0 +1,23 @@
+#!/bin/bash
+
+echo "Running tests..."
+
+# if gunzip -c initrd.cpio.gz | cpio -t --quiet | grep -q 'bin/busybox$' && gunzip -c initrd.cpio.gz | cpio -t --quiet | grep -q '^init'; then
+#     echo -e "\033[32mTest passed: bin/busybox and init are present in build directory\033[0m"
+# else
+#     echo -e "\033[31mW A R N I N G !!! Test failed: bin/busybox or init or both is missing in build directory\033[0m"
+#     exit 1
+# fi
+
+
+if gunzip -c initrd.cpio.gz | cpio -t --quiet | grep -qo 'bin/busybox'; then
+	echo "Pattern 'bin/busybox' found in command output.";
+else
+	echo "Pattern 'bin/busybox' not found in command output.";
+fi
+
+if gunzip -c initrd.cpio.gz | cpio -t --quiet | grep -qo '^init$'; then
+	echo "Pattern 'bin/init' found in command output.";
+else
+	echo "Pattern 'bin/init' not found in command output.";
+fi
