@@ -23,6 +23,8 @@ RAW_TAR := 1.tar
 OUTPUT_QCOW2 := output.qcow2
 IMAGEEROFS := debian2.erofs
 HYPERVISOR := cloud-hypervisor
+
+# HARDCODED vmlinux 6.2 ( TODO: write build script)
 KERNEL_IMAGE := ./linux-cloud-hypervisor/arch/x86/boot/compressed/vmlinux.bin
 INITRD_IMAGE := ./customInitrd/initrd.cpio.gz
 
@@ -65,7 +67,8 @@ $(RAW_TAR): $(ROOTFS_TAR)
 
 ################### WARNING ADDING SIZE IS IMPORTANT
 ################### IF THERE NO ENOUGH FREE SPACE IN output.qcow2 BUILD WILL CRASH
-#### TODO: MAKE size PREDICTION  OR SWITCH TO OTHER UTILS
+#### TODO: MAKE size PREDICTION BY SIMPLE FORMULA = sizeof incl. files + PADDING(~10M)
+#   | OR SWITCH TO OTHER UTILS
 
 
 $(OUTPUT_QCOW2): $(RAW_TAR)
@@ -76,7 +79,7 @@ $(OUTPUT_QCOW2): $(RAW_TAR)
 		--root-password password:123 \
 		--hostname "hostname" \
 		--firstboot "deploy_sources/scripts/ntwrk.sh" \
-		--firstboot-command "ssh-keygen -A && systemctl restart sshd" \
+		--firstboot-command "ssh-keygen -A && systemctl enable sshd" \
 		--copy-in "deploy_sources/debs/busybox-static_1.35.0-4+b3_amd64.deb:/var/cache/apt/" \
 		--install "/var/cache/apt/busybox-static_1.35.0-4+b3_amd64.deb" \
 		--firstboot-command "apt-get -y clean"
@@ -91,6 +94,7 @@ clean:
 	rm -f $(ROOTFS_TAR) $(RAW_TAR) $(OUTPUT_QCOW2) $(IMAGEEROFS)
 	rm -rf rootfs_building
 	rm -f ./cloud-hypervisor-test.sock
+	rm -f ./ch.vsock
 
 test:
 	@if [ ! -f $(KERNEL_IMAGE) ]; then \
@@ -116,6 +120,7 @@ initrd:
 #
 runhv:
 	@rm -f ./cloud-hypervisor-test.sock
+	@rm -f ./ch.vsock
 	@#(sleep 70s && killall -9 cloud-hypervisor && tset) &
 	@echo " "
 	@echo -e "[ ] \033[32mHello. The hypervisor will commence autostart shortly.\033[0m"
@@ -135,6 +140,7 @@ runhv:
 		--cpus boot=2 \
 		--memory size=1024M \
 		--net "tap=,mac=,ip=198.51.100.1,mask=255.255.255.0" \
+		--vsock cid=3,socket=./ch.vsock \
 		--api-socket ./cloud-hypervisor-test.sock \
 		--initramfs=$(INITRD_IMAGE) && reset
 
