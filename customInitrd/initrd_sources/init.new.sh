@@ -241,7 +241,7 @@ mount -n -o move /dev ${rootmnt}/dev
 # debug
 #/bin/sh
 
-echo "AAAAAAAAAAAAAAAAA GAY OS BOOTING NICCCEEEE"
+echo "AAAAAAAAAAAAAAAAA OS BOOTING NICCCEEEE"
 
 exec run-init ${drop_caps} "${rootmnt}" "${init}" "$@" <"${rootmnt}/dev/console" >"${rootmnt}/dev/console" 2>&1
 echo "Something went badly wrong in the initramfs."
